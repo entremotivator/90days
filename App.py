@@ -1,65 +1,104 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 from datetime import datetime, timedelta
 
-# Initialize data for 90 days (only if it hasn't been initialized)
+# Initialize the DataFrame in session state if not already done
 if 'tasks_df' not in st.session_state:
-    # Create a dataframe for 90 days with sample tasks
     days = [(datetime.today() + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(90)]
     tasks_df = pd.DataFrame({
         'Date': days,
-        'Task 1': [False]*90,
-        'Task 2': [False]*90,
-        'Task 3': [False]*90
+        'Task 1': [False] * 90,
+        'Task 2': [False] * 90,
+        'Task 3': [False] * 90,
+        'Task 4': [False] * 90,
+        'Task 5': [False] * 90,
+        'Notes': [''] * 90,
     })
     st.session_state['tasks_df'] = tasks_df
 
-# Title and Description
-st.title("90-Day, 90-Minute Daily Task Tracker")
-st.write("Track your daily tasks and keep your momentum going for the next 90 days!")
+# App Title and Introduction
+st.title("90-Day Goal Tracker: 90 Minutes a Day!")
+st.subheader("Stay motivated and consistent by tracking daily tasks, reviewing progress, and reflecting over a 90-day journey.")
+st.write("Each day, check off tasks, add notes, and see your progress grow. Remember, small steps make big changes!")
 
-# Select Day
-selected_day = st.selectbox("Choose a Day:", st.session_state['tasks_df']['Date'])
+# Sidebar for Date Navigation
+st.sidebar.title("Day Selector")
+selected_day = st.sidebar.selectbox("Navigate to a Day:", st.session_state['tasks_df']['Date'])
+day_index = st.session_state['tasks_df'][st.session_state['tasks_df']['Date'] == selected_day].index[0]
 
-# Filter dataframe for the selected day
-day_tasks = st.session_state['tasks_df'][st.session_state['tasks_df']['Date'] == selected_day]
+# Task Tracking Section
+st.header(f"Task Completion for {selected_day}")
+st.write("Mark tasks as completed for today:")
+for i in range(1, 6):
+    task_col = f'Task {i}'
+    st.session_state['tasks_df'].at[day_index, task_col] = st.checkbox(
+        task_col, value=st.session_state['tasks_df'].at[day_index, task_col])
 
-# Display Checklist for Tasks
-st.write(f"Tasks for {selected_day}:")
-for col in day_tasks.columns[1:]:
-    day_tasks.loc[:, col] = st.checkbox(col, value=day_tasks[col].values[0])
-
-# Update session state with changes
-st.session_state['tasks_df'].update(day_tasks)
+# Notes Section
+st.subheader("Daily Reflections and Notes")
+st.session_state['tasks_df'].at[day_index, 'Notes'] = st.text_area(
+    "Capture your thoughts or insights from the day:", value=st.session_state['tasks_df'].at[day_index, 'Notes'])
 
 # Save Progress Button
-if st.button("Save Progress"):
-    st.write("Progress Saved!")
-    # (Optional) Save to a CSV file for persistence if required:
-    # st.session_state['tasks_df'].to_csv('90_day_tasks.csv', index=False)
+if st.button("Save Today’s Progress"):
+    st.success("Your progress for today has been saved!")
 
-# Progress Tracking
-st.write("## Progress Overview")
-completed_tasks = st.session_state['tasks_df'].iloc[:, 1:].sum(axis=1)
-progress_df = pd.DataFrame({
-    'Date': st.session_state['tasks_df']['Date'],
-    'Tasks Completed': completed_tasks
-})
+# Progress Overview Section
+st.header("Progress Overview")
+completed_tasks = st.session_state['tasks_df'].iloc[:, 1:6].sum(axis=1)
+st.session_state['tasks_df']['Completed Tasks'] = completed_tasks
 
-# Plot progress
-st.line_chart(progress_df.set_index('Date')['Tasks Completed'])
+# Display progress as a bar chart
+st.write("### Daily Task Completion Trend")
+st.line_chart(st.session_state['tasks_df']['Completed Tasks'], use_container_width=True)
 
-# Summary Analytics
-total_tasks = len(st.session_state['tasks_df']) * (len(st.session_state['tasks_df'].columns) - 1)
+# Calculate and Display Overall Progress
+total_tasks = 5 * 90
 completed_total = completed_tasks.sum()
-st.write("### Total Completion Status")
-st.write(f"Tasks Completed: {completed_total} / {total_tasks}")
-st.write(f"Overall Progress: {completed_total / total_tasks * 100:.2f}%")
+completion_percentage = (completed_total / total_tasks) * 100
+st.write(f"**Overall Progress:** {completion_percentage:.2f}% ({completed_total} of {total_tasks} tasks completed)")
 
-# Motivation / Reminder Message
-if completed_total < total_tasks / 2:
-    st.warning("Keep going! You're halfway there!")
-elif completed_total >= total_tasks / 2 and completed_total < total_tasks:
-    st.info("Great job! You're on track to reach 100%.")
+# Motivational Feedback
+st.write("### Keep Going!")
+if completion_percentage < 33:
+    st.warning("You’re getting started! Every small action is a step closer to your goal.")
+elif 33 <= completion_percentage < 66:
+    st.info("Solid progress! Keep up the momentum—you’re more than halfway!")
 else:
-    st.success("Congratulations! You've completed all tasks!")
+    st.success("Amazing dedication! You’re nearing the finish line!")
+
+# Export to CSV
+st.header("Export Your Progress")
+if st.button("Download Progress CSV"):
+    st.session_state['tasks_df'].to_csv('90_day_goal_tracker_progress.csv', index=False)
+    st.success("Progress data exported as '90_day_goal_tracker_progress.csv'.")
+
+# Weekly Overview and Analytics
+st.header("Weekly Analysis")
+st.write("### Task Completion by Week")
+weekly_completion = st.session_state['tasks_df'].groupby(
+    np.arange(len(st.session_state['tasks_df'])) // 7)['Completed Tasks'].sum().reset_index()
+weekly_completion['Week'] = weekly_completion.index + 1
+st.bar_chart(weekly_completion['Completed Tasks'], use_container_width=True)
+
+# Daily Notes Review
+st.header("Daily Reflections Summary")
+selected_notes_day = st.selectbox("Select a Day to Review Notes:", st.session_state['tasks_df']['Date'])
+notes_index = st.session_state['tasks_df'][st.session_state['tasks_df']['Date'] == selected_notes_day].index[0]
+st.write(f"**Notes for {selected_notes_day}:**")
+st.write(st.session_state['tasks_df'].at[notes_index, 'Notes'])
+
+# 90-Day Reflection Section
+st.header("90-Day Reflection")
+if st.button("View Full 90-Day Summary"):
+    st.write("### Completion Summary for the 90 Days")
+    st.write(st.session_state['tasks_df'][['Date', 'Completed Tasks', 'Notes']])
+    
+# Save Final Reflection
+st.subheader("Save Your 90-Day Reflection")
+reflection_text = st.text_area("Reflect on your 90-day journey here:")
+if st.button("Save Reflection"):
+    with open('90_day_reflection.txt', 'w') as f:
+        f.write(reflection_text)
+    st.success("Reflection saved as '90_day_reflection.txt'.")
